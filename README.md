@@ -2,6 +2,8 @@
 
 Hi Jonah, I will use this `README` as a place to share sources and ideas for each of the bullit points. 
 
+
+
 * Describe your model and method (including model selection and valida-
 tion)
   *
