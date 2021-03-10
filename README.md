@@ -6,11 +6,16 @@ Hi Jonah, I will use this `README` as a place to share sources and ideas for eac
 
 * Describe your model and method (including model selection and valida-
 tion)
-  *
+
 
 * Argue for your choices of model, model selection and validation.
 
 * Describe how you handled missing data.
+    * 3 ways 
+       * throw away input with missing features 
+       * impute missing values with feature means 
+       * If a categorical feature, let "missing" be a new category: 
+       * [Source](https://davidrosenberg.github.io/mlcourse/Archive/2017Fall/Lectures/10a.trees.pdf), p 32
 
 * Describe how you handled factors in the features (catergorical variables).
   * We can try both with the so called *integrer encoding* i.e. `K=1, H=2 ...` or use so called *One-Hot Encoding* i.e. extend the dataset with dummy varibales. A good quick guide can be seen at:
