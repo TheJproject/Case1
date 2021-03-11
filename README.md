@@ -9,7 +9,10 @@ tion)
    * Regression tree with 'missing' as a new category: 
       * RMSE traning 49.26
       * RMSE test 46.32
-
+   * XGBoost is very promising, with NaN replaced by "Missing".
+      * RMSE test 35.04
+   * Trying the stacking method to get better results but currently not as good as XGB
+      * RMSE test 37.13 
 
 * Argue for your choices of model, model selection and validation.
 
