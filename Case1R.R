@@ -3,10 +3,21 @@
 library(rpart)
 library(party)
 library(rpart.plot)
-# falsely importing a packe for classification tree
-library(adabag)
 library(mboost)
 library(randomForest)
+library(missf)
+
+library(onehot)
+
+# for elastic net
+library('lars') 
+library('glmnet')
+library('cvTools')  
+
+# to handle missing values 
+library(mice)
+library("missForest")
+
 # clear dir etc 
 rm(list=ls())
 
@@ -37,8 +48,13 @@ plot(y)
 # we subset 20% for testing and 80% for traning: 
 
 smp_size = 80 
-set.seed(123)
-train_ind <- sample(n, size = smp_size)
+set.seed(123456789)
+
+train_ind <- sample(100, size = smp_size)
+test <- (1:100)[-train_ind]
+
+splitting = data.frame('train'=train_ind,'test'=test)
+write.csv(splitting,"C:\\Users\\Nicolaj\\Documents\\GitHub\\Case1\\split.csv",row.names = F)
 
 ytr = y[train_ind]
 xtr = x[train_ind,]
@@ -253,6 +269,8 @@ n_tree_opt = 80
 mtry_opt = 60 
 nodesize_opt = 5
 
+bestmtry <- tuneRF(x=train.inst[,-1], y=train.inst[,1], stepFactor=1.5, improve=1e-10, ntree=500)
+print(bestmtry)
 
 # we make the last randomforrest: 
 rf=randomForest(x = partFram[,-1],y = partFram[,1],ntree=n_tree_opt,mtry=mtry_opt,nodesize=nodesize_opt)
@@ -264,5 +282,110 @@ rf=randomForest(x = partFram[,-1],y = partFram[,1],ntree=n_tree_opt,mtry=mtry_op
 rmse_reg(rf,partFram,'yn')
 
 rmse_reg(rf,testFrame,'y')
-# this is also greatly reduced 
+
+# it seems that we are overfitting as there is a great discrepancy between test and train performance. 
+
+
+
+
+
+#### Elastic net ####
+# before we have simply treated NA as an instrance. Lets make it an actual NA: 
+data = read.csv("case1Data.txt",sep=",")
+
+nan_class = as.character(data$C_1[1]);
+data$C_1 = replace(data$C_1, data$C_1 == nan_class, NA);
+data$C_2 = replace(data$C_2, data$C_2 == nan_class, NA);
+data$C_3 = replace(data$C_3, data$C_3 == nan_class, NA);
+data$C_4 = replace(data$C_4, data$C_4 == nan_class, NA);
+data$C_5 = replace(data$C_5, data$C_5 == nan_class, NA);
+
+indexCat = (dim(data)[2]-4):(dim(data)[2])
+# we can now factor the charactor columns
+data[,indexCat]=lapply(data[,indexCat], factor)
+
+
+smp_size = 80 
+set.seed(123)
+train_ind <- sample(n, size = smp_size)
+
+train = data[train_ind,]
+test = data[-train_ind,]
+
+# devide into x and y
+y.train = as.vector(train[,1])
+x.train = as.data.frame(train[,-1])
+
+y.test = as.vector(test[,1])
+x.test = as.data.frame(test[,-1])
+
+# we can try to impute missing values:
+# here just using missForest which is a random forrest to predict it: 
+missf = missForest(x.train)
+
+
+# we now one-hot encode the data
+encoder <- onehot(x.train)
+x.train.hot <- as.matrix(predict(encoder,x.train))
+x.test.hot <- as.matrix(predict(encoder,x.test))
+
+# we have now added: 
+print(paste(dim(x.hot)[2] - n, " new varibles"))
+
+
+# we now do the Elastic net for different alphas remember that 
+mse1se <- c()
+mseMin <- c()
+mse1seOut <- c()
+
+for (i in 0:100) {
+  assign(paste("fit", i, sep=""), cv.glmnet(x.train.hot, y.train, type.measure="mse", 
+                                            alpha=i/100,family="gaussian"))
+  
+  mse1se = append(mse1se, mean((y.test - predict(eval(parse(text =  paste("fit", i, sep=""))), s=eval(parse(text =  paste("fit", i, sep="")))$lambda.1se, newx=x.test.hot))^2))
+  mseMin = append(mseMin, mean((y.test - predict(eval(parse(text =  paste("fit", i, sep=""))), s=eval(parse(text =  paste("fit", i, sep="")))$lambda.min, newx=x.test.hot))^2))
+  #mse1seOut = append(mse1seOut, mean((y_out - predict(eval(parse(text =  paste("fit", i, sep=""))), s=eval(parse(text =  paste("fit", i, sep="")))$lambda.1se, newx=x_out))^2))
+}
+
+
+plot((0:100)/100,mse1se,xlab=expression(alpha),main=expression(paste("MSE w. largest ",lambda," within 1 SE of ",lambda[min])))
+plot((0:100)/100,mseMin,xlab=expression(alpha),main=expression(paste("MSE w. ",lambda[min])))
+
+# we see that we get better performance for larger alpha. 
+# remember: 
+# (1-alpha)/2 sum(vp_jb_j^2) + alpha sum(vp_j)|beta|
+# i.e. if alpha is great more lasso L1 regulization while small alpha would be more L2 and ridge
+# we have more Lasso here the better. REMEMEBER that CV uses crossvalidation default number of folds
+# is 10!!!!
+
+# we can now take out the one with the higest lambda witin 1 se of the lambda that minimizes MSE 
+rmse_reg_elas <- function(model_obj, testing = NULL, target = NULL) {
+  #Calculates rmse for a regression decision tree
+  #Arguments:
+  # testing - test data set
+  # target  - target variable (length 1 character vector)
+  yhat <- predict(model_obj, newx = testing)
+  actual <- testing[[target]]
+  sqrt(mean((yhat-actual)^2))
+}
+
+
+
+
+index_min = which.min(mse1se)
+alpha_opt = (index_min-1)/100
+
+# lest investigate the best i.e. index_min-1
+fit93
+
+x.train.hot <- as.matrix(predict(encoder,x.train))
+x.test.hot <- as.matrix(predict(encoder,x.test))
+
+
+rmse_elas_train = sqrt(mean((predict(fit93,x.train.hot)-y.train)^2))
+
+rmse_elas_test = sqrt(mean((predict(fit93,x.test.hot)-y.test)^2))
+
+print(paste('train RMSE', rmse_elas_train,' test RMSE', rmse_elas_test))
+
 
