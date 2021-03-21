@@ -144,6 +144,43 @@ test.inst <- test.inst[-1,]
 # on test data
 rmse_reg(rf.inst,test.inst[,-1],test.inst[,1])
 
+
+# lets try to train more regiously
+customRF <- list(type = "Regression", library = "randomForest", loop = NULL)
+customRF$parameters <- data.frame(parameter = c("mtry", "ntree","nodesize"), class = rep("numeric", 3), label = c("mtry", "ntree","nodesize"))
+customRF$grid <- function(x, y, len = NULL, search = "grid") {}
+customRF$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
+  randomForest(x, y, mtry = param$mtry, ntree=param$ntree, ...)
+}
+customRF$predict <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata)
+customRF$prob <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata, type = "prob")
+customRF$sort <- function(x) x[order(x[,1]),]
+customRF$levels <- function(x) x$classes
+
+
+control <- trainControl(method="boot", number=5,search = "grid")
+seed <- 7
+set.seed(seed)
+tunegrid <- expand.grid(.mtry=round(seq(1,100,len=4)),.ntree=c(1,5,10,20,100,150),.nodesize=c(1,5,10,20,30))
+
+# takes ~ 5 minutes to run.
+rf_train <- train(y~., data=train.inst, method=customRF, tuneGrid=tunegrid, trControl=control,importance=TRUE)
+plot(rf_train)
+
+# mtry could be aounrd 80, ntree= 80 is OK, and nodesize= 5
+# trains 
+rf.inst.revist = randomForest(x = train.inst[,-1],y = train.inst[,1],ntree=80,mtry=80,nodesize=5)
+
+# on traning data 
+rmse_reg(rf.inst.revist,train.inst[,-1],train.inst[,1])
+
+# on test data
+rmse_reg(rf.inst.revist,test.inst[,-1],test.inst[,1])
+
+
+
 # now lets try gradient boosting
 
 gb.inst = blackboost(y ~ .,data=train.inst)
@@ -192,7 +229,7 @@ print(bestmtry)
 # around 100 seems good 
 
 # trains 
-rf.impute = randomForest(x = train.impute[,-1],y = train.impute[,1],ntree=500,mtry=110,nodesize=5)
+rf.impute = randomForest(x = train.impute[,-1],y = train.impute[,1],ntree=500,mtry=100,nodesize=5)
 
 # on traning data 
 rmse_reg(rf.impute,train.impute[,-1],train.impute[,1])
@@ -202,6 +239,16 @@ test.impute <- rbind(train.impute[1, ] , test.impute)
 test.impute <- test.impute[-1,]
 # on test data
 rmse_reg(rf.impute,test.impute[,-1],test.impute[,1])
+
+# grid search: 
+tunegrid <- expand.grid(.mtry=round(seq(1,100,len=4)),.ntree=c(1,5,10,20,100,150),.nodesize=c(1,5,10,20,30))
+
+# takes ~ 5 minutes to run.
+rf_train <- train(y~., data=train.impute, method=customRF, tuneGrid=tunegrid, trControl=control,importance=TRUE)
+plot(rf_train)
+
+
+# again it seems that mtry=80,nodesize=5, ntree=80 are optimal parameterters
 
 # now lets try gradient boosting
 
@@ -252,7 +299,7 @@ print(bestmtry)
 # around 100 seems good 
 
 # trains 
-rf.one.hot = randomForest(x = train.one.hot[,-1],y = train.one.hot[,1],ntree=500,mtry=110,nodesize=5)
+rf.one.hot = randomForest(x = train.one.hot[,-1],y = train.one.hot[,1],ntree=80,mtry=100,nodesize=5)
 
 # on traning data 
 rmse_reg(rf.one.hot,train.one.hot[,-1],train.one.hot[,1])
@@ -262,6 +309,15 @@ test.one.hot <- rbind(train.one.hot[1, ] , test.one.hot)
 test.one.hot <- test.one.hot[-1,]
 # on test data
 rmse_reg(rf.one.hot,test.one.hot[,-1],test.one.hot[,1])
+
+# grid search: 
+tunegrid <- expand.grid(.mtry=round(seq(1,100,len=4)),.ntree=c(1,5,10,20,100,150),.nodesize=c(1,5,10,20,30))
+
+# takes ~ 5 minutes to run.
+rf_train <- train(y~., data=train.one.hot, method=customRF, tuneGrid=tunegrid, trControl=control,importance=TRUE)
+plot(rf_train)
+
+
 
 # now lets try gradient boosting
 
@@ -281,7 +337,7 @@ mseMin <- c()
 mse1seOut <- c()
 
 for (i in 0:100) {
-  assign(paste("fit", i, sep=""), cv.glmnet(x.train.hot, y.train.hot, type.measure="mse", 
+  assign(paste("fit", i, sep=""), cv.glmnet(x.train.hot, y.train.hot, type.measure="mse", standardize = T, 
                                             alpha=i/100,family="gaussian"))
   
   mse1se = append(mse1se, mean((y.test.hot - predict(eval(parse(text =  paste("fit", i, sep=""))), s=eval(parse(text =  paste("fit", i, sep="")))$lambda.1se, newx=x.test.hot))^2))
